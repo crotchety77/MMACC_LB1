@@ -929,8 +929,13 @@ def build_report(input_file: Path = BASE_DIR / "input.txt"):
             run_code.font.color.rgb = RGBColor(30, 41, 59)
             add_p(space_after=4)
 
-    doc.save(str(OUTPUT_DOCX))
-    print(f"Документ успешно сформирован: {OUTPUT_DOCX}")
+    try:
+        doc.save(str(OUTPUT_DOCX))
+        print(f"Документ успешно сформирован: {OUTPUT_DOCX}")
+    except PermissionError:
+        alt_path = BASE_DIR / "Лабораторная_работа_1_Экспертные_оценки_актуальная.docx"
+        doc.save(str(alt_path))
+        print(f"Файл {OUTPUT_DOCX.name} заблокирован Word. Документ успешно сохранён в: {alt_path}")
 
 
 if __name__ == "__main__":
