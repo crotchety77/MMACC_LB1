@@ -54,3 +54,6 @@ Desktop.ini
 # Frontend
 frontend/node_modules/
 frontend/dist/
+
+# Office / Word temp lock files
+~$*
