@@ -23,6 +23,22 @@
    - Матрицы попарных разностей $|A_i - A_j|$
    - Матрица потерь $r_{ij}$
 
+### Таблица соответствия требованиям лабораторной работы и отчёта
+
+| Требование задания / отчёта | Где реализовано в программе | Пункт меню |
+|---|---|:---:|
+| **Метод средних арифметических рангов** | `expert_estimate.stats.get_ranking_by_average` | `3` |
+| **Метод медианных рангов** | `expert_estimate.stats.get_ranking_by_median` | `4` |
+| **Векторы предпочтений $\pi^{(k)}$** | `expert_estimate.kemeny.get_preference_vectors` | `5` |
+| **Матрицы бинарных отношений** | `expert_estimate.relations.get_binary_relations` | `6` |
+| **Матрица попарных расстояний Кемени** | `expert_estimate.relations.build_distance_matrix` | `7` |
+| **Матрицы разностей $\|A - B\|$** | `expert_estimate.relations.get_diff_relations_matrixes` | `8` |
+| **Медиана Кемени среди экспертов** | `expert_estimate.kemeny.get_kemeny_medians_by_experts` | `9` |
+| **Медиана Кемени через задачу о назначениях** (матрица потерь $r_{ij}$ + назначения) | `expert_estimate.kemeny.get_kemeny_median_assignment` | `10` |
+| **Медиана Кемени на множестве всех ранжировок** (полный перебор) | `expert_estimate.kemeny.get_all_kemeny_medians_bruteforce` | `11` |
+| **Сравнение всех подходов и пересечений** | `expert_estimate.printers.print_kemeny_comparison` | `12` |
+| **Вывод всех данных сразу для отчёта** | `repl` -> выбор `a` | `a` |
+
 ---
 
 ## 🚀 Установка и запуск
