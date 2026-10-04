@@ -14,5 +14,13 @@ license = {text = "MIT"}
 [tool.pdm]
 # distribution = false
 
+[project.optional-dependencies]
+web = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.28.0",
+    "python-multipart>=0.0.9",
+]
+
 [project.scripts]
 expert-estimate = "expert_estimate.algorithm:main"
+expert-estimate-web = "api.main:run_server"
