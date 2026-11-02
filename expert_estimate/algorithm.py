@@ -189,6 +189,10 @@ def run_stage(code: str, ctx: Context) -> None:
         # Итоговая аналитическая интерпретация
         if not ctx.relations:
             ctx.relations = get_binary_relations(ctx.transformed, ctx.objects)
+        if ctx.distances is None:
+            ctx.distances = build_distance_matrix(ctx.relations)
+        if not ctx.medians_experts:
+            ctx.medians_experts = get_kemeny_medians_by_experts(ctx.distances)
         if ctx.assignment is None:
             ctx.assignment = get_all_assignment_medians(ctx.transformed, ctx.objects)
         if ctx.bruteforce is None:
@@ -205,6 +209,8 @@ def run_stage(code: str, ctx: Context) -> None:
             assignment_total=assign_total,
             bruteforce_orders=kemeny_orders,
             bruteforce_total=kemeny_total,
+            distances=ctx.distances,
+            medians_experts=ctx.medians_experts,
         )
 
 

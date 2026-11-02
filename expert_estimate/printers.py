@@ -177,16 +177,18 @@ def print_preference_vectors(preference_vectors: Dict[int, Dict[str, int]], obje
 def print_binary_relations(relations: Dict[int, NamedMatrix]) -> None:
     """Печать квадратных матриц бинарных отношений A_k."""
     print_header("4. БИНАРНЫЕ ОТНОШЕНИЯ И РАССТОЯНИЯ КЕМЕНИ", "Отношение нестрогого доминирования: x_ij = 1, если r_i >= r_j; иначе 0")
+    print_note("Диагональ всегда равна 1 (x_ii = 1). Элемент x_ij = 0 означает, что объект a_i строго лучше объекта a_j.")
     for expert, m in sorted(relations.items()):
         print(f"\n┌── Эксперт Э{expert} ───────────────────────────────────────┐")
         cols = m.cols
         matrix_rows = [[r] + [m[r, c] for c in cols] for r in m.rows]
         print(format_box_table([" "] + cols, matrix_rows, ["center"] * (len(cols) + 1)))
-    print_note("Диагональ всегда равна 1 (x_ii = 1). Элемент x_ij = 0 означает, что объект a_i строго лучше объекта a_j.")
+
 
 
 def print_distance_matrix(distances: NamedMatrix) -> None:
     """Матрица попарных расстояний Кемени между экспертами."""
+    print_note("Была рассчитана матрица попарных расстояний D размера 5 × 5. Для каждого эксперта вычислена сумма расстояний")
     print("\n┌── Матрица попарных расстояний Кемени D ────────────────────────────────┐")
     cols = distances.cols
     rows = []
@@ -382,65 +384,121 @@ def print_analytical_interpretation(
     assignment_total: int,
     bruteforce_orders: List[List[str]],
     bruteforce_total: int,
+    distances: Optional[NamedMatrix] = None,
+    medians_experts: Optional[List[str]] = None,
 ) -> None:
-    """Формирует и выводит итоговую динамическую интерпретацию группового выбора."""
-    from .kemeny import kemeny_total_distance
-    from .stats import get_ranking_by_average, get_ranking_by_median
+    """Формирует и выводит итоговую аналитическую интерпретацию результатов."""
+    import math
+    from .kemeny import get_kemeny_medians_by_experts, kemeny_total_distance
+    from .relations import build_distance_matrix
+    from .stats import format_places_order, get_ranking_by_average, get_ranking_by_median
 
+    if distances is None:
+        distances = build_distance_matrix(relations)
+    if medians_experts is None:
+        medians_experts = get_kemeny_medians_by_experts(distances)
+
+    print_header("9. ИТОГОВАЯ АНАЛИТИЧЕСКАЯ ИНТЕРПРЕТАЦИЯ РЕЗУЛЬТАТОВ", "Сравнение методов агрегирования экспертных оценок")
+
+    # 1. Результаты агрегирования экспертных оценок
     avg_ranking = get_ranking_by_average(table)
     med_ranking = get_ranking_by_median(table)
+    avg_order_str = format_places_order(avg_ranking)
+    med_order_str = format_places_order(med_ranking)
 
-    print_header("9. ИТОГОВАЯ АНАЛИТИЧЕСКАЯ ИНТЕРПРЕТАЦИЯ РЕЗУЛЬТАТОВ", "Синтез коллективного решения на основе всех исследованных методов")
+    avg_leaders = [item[1] for item in avg_ranking if item[0] == 1]
+    avg_leader_str = ", ".join(avg_leaders)
+    avg_rank_val = avg_ranking[0][2]
 
-    # 1. Анализ лидеров и аутсайдеров по Кемени
-    first_places = [order[0] for order in bruteforce_orders]
-    last_places = [order[-1] for order in bruteforce_orders]
+    med_leaders = [item[1] for item in med_ranking if item[0] == 1]
+    med_leader_str = ", ".join(med_leaders)
+    med_rank_val = med_ranking[0][2]
 
-    top_objs = sorted(list(set(first_places)))
-    bottom_objs = sorted(list(set(last_places)))
-
-    print("\n1. Распределение приоритетов:")
-    if len(top_objs) == 1:
-        print(f"   • По критерию Кемени наилучшей признана альтернатива: {top_objs[0]}.")
+    sums = {row: sum(distances[row].values()) for row in distances.rows}
+    s_min = sums[medians_experts[0]]
+    if len(medians_experts) == 1:
+        expert_label = f"эксперт Э{medians_experts[0]}"
     else:
-        print(f"   • В группу ключевых претендентов на лидерство входят: {', '.join(top_objs)}.")
+        expert_label = f"эксперты {', '.join(f'Э{m}' for m in medians_experts)}"
 
-    if len(bottom_objs) == 1:
-        print(f"   • Наихудшей (замыкающей) признана альтернатива: {bottom_objs[0]}.")
-    else:
-        print(f"   • Замыкающие позиции делят альтернативы: {', '.join(bottom_objs)}.")
+    expert_ranks = table[int(medians_experts[0])]
+    expert_order = [obj for obj, _ in sorted(expert_ranks.items(), key=lambda x: x[1])]
+    expert_order_str = " ≻ ".join(expert_order)
 
-    print(f"   • По средним арифметическим рангам лидирует: {avg_ranking[0][1]} (средний ранг {avg_ranking[0][2]:.2f}).")
-    print(f"   • По медианным рангам лидирует: {med_ranking[0][1]} (медианный ранг {med_ranking[0][2]:.2f}).")
+    print("\n1. РЕЗУЛЬТАТЫ АГРЕГИРОВАНИЯ ЭКСПЕРТНЫХ ОЦЕНОК")
+    print(f"\n  • Метод средних арифметических рангов:\n    {avg_order_str}.")
+    print(f"    Лидер — {avg_leader_str} со средним рангом {avg_rank_val:.2f}.")
 
-    # 2. Сопоставление задачи о назначениях и медианы Кемени
-    print("\n2. Сопоставление задачи о назначениях и медианы Кемени:")
+    print(f"\n  • Метод медианных рангов:\n    {med_order_str}.")
+    print(f"    Лидер — {med_leader_str} с медианным рангом {med_rank_val:.2f}.")
+
+    print("\n  • Медиана среди исходных экспертных ранжировок:")
+    print(f"    минимальная сумма расстояний Кемени S_min = {s_min}.")
+    print(f"    Наилучшее согласование с остальными экспертами показывает {expert_label}:")
+    print(f"    {expert_order_str}.")
+
+    # 2. Сравнение оптимизационных методов
+    print("\n2. СРАВНЕНИЕ ОПТИМИЗАЦИОННЫХ МЕТОДОВ")
+    first_as = assignment_orders[0]
+    first_km = bruteforce_orders[0]
+    as_order_str = " ≻ ".join(first_as)
+    km_order_str = " ≻ ".join(first_km)
+
+    print("\n  • Задача о назначениях:")
+    print(f"    оптимальный порядок — {as_order_str};")
+    print(f"    минимальная сумма позиционных потерь Φ_Assign = {assignment_total}.")
+
+    print("\n  • Истинная медиана Кемени:")
+    print(f"    оптимальный порядок — {km_order_str};")
+    print(f"    минимальная сумма расстояний Φ_Kemeny = {bruteforce_total}.")
+
+    d_as = kemeny_total_distance(first_as, relations, objects)
+
     assign_set = {tuple(o) for o in assignment_orders}
     kemeny_set = {tuple(o) for o in bruteforce_orders}
     common = assign_set.intersection(kemeny_set)
 
-    if common:
-        print(f"   • Решение задачи о назначениях строго совпало с истинной медианой Кемени.")
-        print(f"   • Значение функции позиционных потерь: {assignment_total}, истинное расстояние Кемени: {bruteforce_total}.")
-    else:
-        first_as = assignment_orders[0]
-        first_km = bruteforce_orders[0]
-        d_as = kemeny_total_distance(first_as, relations, objects)
-        print(f"   • Порядок, полученный из задачи о назначениях ({' ≻ '.join(first_as)}),")
-        print(f"     не совпадает с истинной глобальной медианой Кемени ({' ≻ '.join(first_km)}).")
-        print(f"   • Минимум потерь по критерию задачи о назначениях составил {assignment_total};")
-        print(f"     расстояние Кемени для полученного порядка равно {d_as},")
-        print(f"     что превышает значение глобального оптимума ({bruteforce_total}).")
-        print("   • Вывод: оптимизация задачи о назначениях с позиционной матрицей потерь")
-        print("     сглаживает парные циклические доминирования и не гарантирует")
-        print("     нахождения медианы Кемени.")
+    if not common:
+        diff_objs = [obj for i, obj in enumerate(first_km) if first_km[i] != first_as[i]]
+        diff_unique = sorted(list(set(diff_objs)))
+        if len(diff_unique) == 2:
+            diff_text = f"перестановкой проектов {diff_unique[0]} и {diff_unique[1]}"
+        else:
+            diff_text = f"порядком альтернатив {', '.join(diff_unique)}"
 
-    # 3. Множественность оптимумов
-    print("\n3. Итоговый выбор экспертов:")
-    if len(bruteforce_orders) == 1:
-        print(f"   • Найдено единственное глобальное медианное ранжирование")
-        print(f"     со значением Кемени {bruteforce_total}: {' ≻ '.join(bruteforce_orders[0])}.")
-        print(f"   • Итоговый порядок проектов, согласованный с мнениями всех экспертов, определён однозначно.")
+        print(f"\n  • Полученные ранжировки различаются {diff_text}.")
+        print("    При этом сумма расстояний Кемени для решения задачи о назначениях")
+        print(f"    равна {d_as}, что превышает глобальный минимум {bruteforce_total}.")
     else:
-        print(f"   • Найдено {len(bruteforce_orders)} РАВНОПРАВНЫХ глобальных оптимумов Кемени со значением {bruteforce_total}.")
-        print("   • Это свидетельствует о наличии паритета между несколькими перестановками внутри группы.")
+        print("\n  • Решение задачи о назначениях совпало с истинной медианой Кемени.")
+        print(f"    Сумма расстояний Кемени для данного порядка равна {d_as}.")
+
+    print("\n  ВЫВОД: задача о назначениях и поиск медианы Кемени оптимизируют")
+    print("  разные целевые функции. Минимизация позиционных потерь не гарантирует")
+    print("  нахождения глобальной медианы Кемени.")
+
+    # 3. Итоговое решение задачи коллективного выбора
+    n = len(objects)
+    num_checked = math.factorial(n)
+
+    print("\n3. ИТОГОВОЕ РЕШЕНИЕ ЗАДАЧИ КОЛЛЕКТИВНОГО ВЫБОРА\n")
+    print(f"  • Проверено {n}! = {num_checked} возможных ранжировок.")
+    if len(bruteforce_orders) == 1:
+        print("  • Найдена единственная глобальная медиана Кемени.")
+    else:
+        print(f"  • Найдено {len(bruteforce_orders)} глобальных медиан Кемени.")
+    print(f"  • Минимальное значение критерия Кемени — {bruteforce_total}.")
+    print(f"  • Итоговое ранжирование:\n    {km_order_str}.")
+
+    leader_obj = first_km[0]
+    last_obj = first_km[-1]
+
+    print("\n  ОБЩИЙ ВЫВОД:")
+    print("  По результатам полного перебора установлено, что глобально оптимальное")
+    print(f"  коллективное ранжирование — {km_order_str}.")
+    print(f"  Альтернатива {leader_obj} занимает первое место, а {last_obj} — последнее.")
+    print("  Результаты демонстрируют, что выбор метода агрегирования влияет")
+    print("  на итоговый порядок альтернатив, поэтому для определения глобально")
+    print("  оптимального ранжирования по критерию Кемени необходимо минимизировать")
+    print("  именно сумму расстояний Кемени.")
+    print("═" * 76)
