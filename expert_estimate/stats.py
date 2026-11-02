@@ -1,3 +1,4 @@
+from itertools import groupby
 from statistics import median
 from typing import Dict, List, Tuple
 
@@ -29,8 +30,14 @@ def get_sorted_by_rank(
     ranks: Dict[str, float],
     ascending: bool = True,
 ) -> List[Tuple[str, float]]:
-    """Сортирует объекты по значению (лучший — первый при ascending=True)."""
-    return sorted(ranks.items(), key=lambda x: x[1], reverse=not ascending)
+    """
+    Сортирует объекты по значению (лучший — первый при ascending=True).
+    При равенстве рангов объекты упорядочиваются по имени (a1, a2, ...).
+    """
+    return sorted(
+        ranks.items(),
+        key=lambda x: (x[1] if ascending else -x[1], x[0]),
+    )
 
 def assign_places(sorted_ranks: List[Tuple[str, float]]) -> List[Tuple[int, str, float]]:
     """
@@ -48,6 +55,21 @@ def assign_places(sorted_ranks: List[Tuple[str, float]]) -> List[Tuple[int, str,
         result.append((place, obj, value))
 
     return result
+
+def format_places_order(places: List[Tuple[int, str, float]], sep: str = " ≻ ") -> str:
+    """
+    Форматирует канонический вид порядка альтернатив с учетом равенства мест/рангов:
+    равнозначные альтернативы объединяются знаком равенства в скобках.
+    Пример: a2 ≻ (a1 = a3 = a5) ≻ a4
+    """
+    groups = []
+    for _, group in groupby(places, key=lambda x: x[0]):
+        objs = sorted([item[1] for item in group])
+        if len(objs) == 1:
+            groups.append(objs[0])
+        else:
+            groups.append(f"({' = '.join(objs)})")
+    return sep.join(groups)
 
 def get_ranking_by_average(table: Dict[int, Dict[str, int]]) -> List[Tuple[int, str, float]]:
     """Готовое ранжирование по среднему — удобный враппер."""

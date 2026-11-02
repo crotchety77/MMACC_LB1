@@ -7,7 +7,7 @@
 
 from typing import Dict, List, Optional, Tuple
 from .named_matrix import NamedMatrix
-from .stats import assign_places, get_sorted_by_rank
+from .stats import assign_places, format_places_order, get_sorted_by_rank
 
 
 # =========================================================================
@@ -27,7 +27,7 @@ def print_header(title: str, subtitle: Optional[str] = None) -> None:
 
 def print_note(text: str) -> None:
     """Выводит поясняющую подсказку или аналитический комментарий."""
-    print(f"\n💡 Пояснение: {text}")
+    print(f"\n{text}")
 
 
 def format_box_table(
@@ -115,7 +115,7 @@ def print_transformed_data(table: Dict[int, Dict[str, int]], objects: List[str])
         rows.append([f"Э{num}"] + [ranks.get(obj, "—") for obj in objects])
 
     print(format_box_table(columns, rows, ["center"] * len(columns)))
-    print_note("Ранг 1 присвоен наилучшей альтернативе, максимальный ранг — наихудшей.")
+    print_note("Ранг `1` присвоен наилучшей альтернативе, `5` ранг — наихудшей.")
 
 
 # =========================================================================
@@ -138,15 +138,18 @@ def print_ranking_by_average(ranks_avg: Dict[str, float]) -> None:
     print_ranking("Итоговое ранжирование по среднему баллу", places, "средний ранг")
     lead_obj = places[0][1]
     lead_val = places[0][2]
-    print_note(f"Альтернатива {lead_obj} получила минимальный средний балл ({lead_val:.2f}) и заняла 1-е место. Чем меньше r̄, тем выше приоритет.")
+    order_str = format_places_order(places)
+    print(f"\nРезультирующий порядок проектов по методу средних арифметических рангов: {order_str}.")
+    print_note(f"{lead_obj} получила минимальный средний балл ({lead_val:.2f}). Чем меньше r̄, тем выше приоритет.")
 
 
 def print_ranking_by_median(ranks_median: Dict[str, float]) -> None:
     """Метод медианных рангов."""
     places = assign_places(get_sorted_by_rank(ranks_median))
-    print_header("3. МЕТОД МЕДИАННЫХ РАНГОВ", "Робастная порядковая статистика (квантиль порядка 0.5)")
+    print_header("3. МЕТОД МЕДИАННЫХ РАНГОВ", "(квантиль порядка 0.5)")
     print_ranking("Итоговое ранжирование по медиане", places, "медианный ранг")
-    print_note("Медианный ранг устойчив к единичным выбросам и смещённым суждениям отдельных экспертов комиссии.")
+    order_str = format_places_order(places)
+    print(f"\nРезультирующий порядок проектов по методу медианных рангов: {order_str}.")
 
 
 # =========================================================================
@@ -155,7 +158,7 @@ def print_ranking_by_median(ranks_median: Dict[str, float]) -> None:
 
 def print_preference_vectors(preference_vectors: Dict[int, Dict[str, int]], objects: List[str]) -> None:
     """Матрица векторов предпочтений π^(k)."""
-    print_header("5. ВЕКТОРЫ ПРЕДПОЧТЕНИЙ π^(k)", "π_i^(k) указывает количество альтернатив, которые эксперт k счёл СТРОГО ЛУЧШЕ a_i")
+    print_header("5. ВЕКТОРЫ ПРЕДПОЧТЕНИЙ π^(k)", "π_i^(k) указывает количество альтернатив, которые эксперт k счёл строго лучше a_i")
     columns = ["Эксперт"] + objects
     rows = []
     for num in sorted(preference_vectors.keys()):
@@ -163,7 +166,8 @@ def print_preference_vectors(preference_vectors: Dict[int, Dict[str, int]], obje
         rows.append([f"Э{num}"] + [pv.get(obj, 0) for obj in objects])
 
     print(format_box_table(columns, rows, ["center"] * len(columns)))
-    print_note("Для строгого упорядочения без связок значение π_i всегда равно (r_i - 1). Лучший объект имеет π = 0.")
+    print_note("Значение π_i всегда равно (r_i - 1). Лучший объект имеет π = 0.")
+    print_note("Для каждой экспертной ранжировки строится вектор предпочтений, координата которого показывает количество объектов, расположенных выше соответствующего объекта в ранжировке. Поскольку ранг первого места равен 1, координаты вектора предпочтений определяются вычитанием единицы из исходной матрицы рангов.")
 
 
 # =========================================================================
@@ -218,18 +222,23 @@ def print_kemeny_median_by_experts(
     rows = []
     for expert, s in sorted(sums.items(), key=lambda x: int(x[0])):
         is_best = (s == best)
-        marker = "★ МЕДИАНА" if is_best else ""
+        marker = "★ Минимум" if is_best else ""
         rows.append([f"Эксперт Э{expert}", s, marker])
 
     print(format_box_table(["Эксперт", "Сумма по строке S_k", "Статус"], rows, ["center", "right", "center"]))
 
-    print(f"\nМинимальное суммарное расстояние Кемени: S_min = {best}")
-    print("Медианное(-ые) экспертное(-ые) ранжирование(-я):")
-    for m in medians:
+    if len(medians) == 1:
+        m = medians[0]
         ranks = transformed[int(m)]
-        order = [obj for obj, _ in sorted(ranks.items(), key=lambda x: x[1])]
-        print(f"  • Эксперт Э{m}: {' ≻ '.join(order)}  (S = {best})")
-    print_note("Данное ранжирование выбрано исключительно из числа предложенных экспертами суждений.")
+        order = " ≻ ".join([obj for obj, _ in sorted(ranks.items(), key=lambda x: x[1])])
+        print(f"\nМинимальная сумма расстояний составила Smin = {best} (эксперт Э{m}). Результирующий порядок проектов: {order}.")
+    else:
+        exp_list = ", ".join([f"Э{m}" for m in medians])
+        print(f"\nМинимальная сумма расстояний составила Smin = {best} (эксперты: {exp_list}).")
+        for m in medians:
+            ranks = transformed[int(m)]
+            order = " ≻ ".join([obj for obj, _ in sorted(ranks.items(), key=lambda x: x[1])])
+            print(f"  • Эксперт Э{m}: {order} (S = {best})")
 
 
 # =========================================================================
@@ -245,15 +254,35 @@ def print_kemeny_assignment(orders: List[List[str]], total: int, loss: NamedMatr
     headers = ["Объект"] + [f"Место {c}" for c in cols]
     print(format_box_table(headers, rows, ["center"] * len(headers)))
 
-    print(f"\n✓ Минимальная сумма позиционных потерь: Φ_Assign = {total}")
-    print(f"✓ Количество оптимальных решений: {len(orders)}")
+    for idx, order in enumerate(orders, start=1):
+        suffix = f" (решение #{idx})" if len(orders) > 1 else ""
+        print(f"\nОптимальная матрица назначений X_ij{suffix}:")
+        obj_to_place = {obj: place for place, obj in enumerate(order, start=1)}
+        x_rows = []
+        for r in loss.rows:
+            row = [r] + [1 if int(c) == obj_to_place[r] else 0 for c in cols]
+            x_rows.append(row)
+        print(format_box_table(headers, x_rows, ["center"] * len(headers)))
+
+    print(f"\n- Минимальная сумма позиционных потерь: Φ_Assign = {total}")
+    print(f"- Количество оптимальных решений: {len(orders)}")
     print("\nОптимальные распределения альтернатив по местам:")
     for i, order in enumerate(orders, start=1):
-        print(f"  {i}. {' ≻ '.join(order)}   (минимальные потери Φ_Assign = {total})")
+        terms = [f"r^{obj.replace('a', '')}{j}" for j, obj in enumerate(order, start=1)]
+        vals = [str(loss[obj, str(j)]) for j, obj in enumerate(order, start=1)]
+        calc_str = f"Φ = {' + '.join(terms)} = {' + '.join(vals)} = {total}"
+        print(f"  {i}. {' ≻ '.join(order)}   ({calc_str})")
+
+    if len(orders) == 1:
+        print(f"\nМинимум позиционных потерь равен {total}, найдено одно решение. Результирующий порядок проектов: {' ≻ '.join(orders[0])}.")
+    else:
+        print(f"\nМинимум позиционных потерь равен {total}, найдено решений: {len(orders)}.")
+        for i, order in enumerate(orders, start=1):
+            print(f"  Результирующий порядок проектов #{i}: {' ≻ '.join(order)}.")
 
     print_note(
         f"Значение {total} относится к позиционной L1-функции штрафа задачи о назначениях. "
-        "Оно не является расстоянием Кемени и оптимизирует другой критерий!"
+        "Оно не является расстоянием Кемени и оптимизирует другой критерий."
     )
 
 
@@ -261,17 +290,21 @@ def print_kemeny_bruteforce(orders: List[List[str]], total: int, num_checked: in
     """Вывод результатов полного перебора Кемени."""
     print_header(
         "7. ИСТИННАЯ МЕДИАНА КЕМЕНИ (ПОЛНЫЙ ПЕРЕБОР ПЕРЕСТАНОВОК)",
-        f"Глобальная минимизация истинного расстояния Кемени Φ_Kemeny(R) = ∑ d(R, R_k) на всех {num_checked} перестановках"
+        f"Глобальная минимизация истинного расстояния Кемени Φ_Kemeny(R) = ∑d(R, R_k) на всех {num_checked} перестановках"
     )
-    print(f"✓ Проверено всех строгих перестановок: {num_checked}")
-    print(f"✓ Минимальная сумма попарных расстояний Кемени: Φ_Kemeny = {total}")
-    print(f"✓ Найдено глобальных оптимумов Кемени: {len(orders)}")
+    print(f"- Проверено всех строгих перестановок: {num_checked}")
+    print(f"- Минимальная сумма попарных расстояний Кемени: Φ_Kemeny = {total}")
+    print(f"- Найдено глобальных оптимумов Кемени: {len(orders)}")
     print("\nГлобальные медианы Кемени:")
     for i, order in enumerate(orders, start=1):
-        print(f"  {i}. {' ≻ '.join(order)}   (истинное расстояние Кемени Σ d = {total})")
+        print(f"  {i}. {' ≻ '.join(order)}   (истинное расстояние Кемени Σd = {total})")
 
-    print_note("Истинная медиана Кемени строго минимизирует сумму попарных инверсий ко всем экспертам комиссии без приближений.")
-
+    if len(orders) == 1:
+        print(f"\nМинимальное истинное расстояние Кемени равно {total}, число глобальных оптимумов — {len(orders)}. Результирующий порядок проектов: {' ≻ '.join(orders[0])}.")
+    else:
+        print(f"\nМинимальное истинное расстояние Кемени равно {total}, число глобальных оптимумов — {len(orders)}.")
+        for i, order in enumerate(orders, start=1):
+            print(f"  Результирующий порядок проектов #{i}: {' ≻ '.join(order)}.")
 
 # =========================================================================
 # 6. СВОДНОЕ СОПОСТАВЛЕНИЕ И ИТОГОВАЯ ИНТЕРПРЕТАЦИЯ
@@ -332,7 +365,7 @@ def print_kemeny_comparison(
             f"Σ d = {bruteforce_total}",
         ])
 
-    headers = ["Метод агрегирования", "Оптимизируемый критерий", "Экстремум", "Результирующий порядок", "Расстояние Кемени"]
+    headers = ["Метод агрегирования", "Оптимизируемый критерий", "Значение критерия", "Результирующий порядок", "Расстояние Кемени"]
     print(format_box_table(headers, comp_rows, ["left", "left", "center", "left", "center"]))
 
     print_note(
@@ -366,22 +399,22 @@ def print_analytical_interpretation(
     top_objs = sorted(list(set(first_places)))
     bottom_objs = sorted(list(set(last_places)))
 
-    print("\n1. СТРУКТУРА КОЛЛЕКТИВНОГО ПРИОРИТЕТА:")
+    print("\n1. Распределение приоритетов:")
     if len(top_objs) == 1:
-        print(f"   • Абсолютным фаворитом по критерию Кемени признана альтернатива: {top_objs[0]}.")
+        print(f"   • По критерию Кемени наилучшей признана альтернатива: {top_objs[0]}.")
     else:
         print(f"   • В группу ключевых претендентов на лидерство входят: {', '.join(top_objs)}.")
 
     if len(bottom_objs) == 1:
-        print(f"   • Наименее предпочтительной (замыкающей) альтернативой признана: {bottom_objs[0]}.")
+        print(f"   • Наихудшей (замыкающей) признана альтернатива: {bottom_objs[0]}.")
     else:
         print(f"   • Замыкающие позиции делят альтернативы: {', '.join(bottom_objs)}.")
 
-    print(f"   • Лидер по средним арифметическим рангам: {avg_ranking[0][1]} (средний ранг {avg_ranking[0][2]:.2f}).")
-    print(f"   • Лидер по медианным рангам: {med_ranking[0][1]} (медианный ранг {med_ranking[0][2]:.2f}).")
+    print(f"   • По средним арифметическим рангам лидирует: {avg_ranking[0][1]} (средний ранг {avg_ranking[0][2]:.2f}).")
+    print(f"   • По медианным рангам лидирует: {med_ranking[0][1]} (медианный ранг {med_ranking[0][2]:.2f}).")
 
     # 2. Сопоставление задачи о назначениях и медианы Кемени
-    print("\n2. СООТНОШЕНИЕ ЗАДАЧИ О НАЗНАЧЕНИЯХ И МЕДИАНЫ КЕМЕНИ:")
+    print("\n2. Сопоставление задачи о назначениях и медианы Кемени:")
     assign_set = {tuple(o) for o in assignment_orders}
     kemeny_set = {tuple(o) for o in bruteforce_orders}
     common = assign_set.intersection(kemeny_set)
@@ -393,20 +426,21 @@ def print_analytical_interpretation(
         first_as = assignment_orders[0]
         first_km = bruteforce_orders[0]
         d_as = kemeny_total_distance(first_as, relations, objects)
-        print(f"   • Решение задачи о назначениях ({' ≻ '.join(first_as)})")
-        print(f"     НЕ совпадает с истинной глобальной медианой Кемени ({' ≻ '.join(first_km)}).")
-        print(f"   • По критерию задачи о назначениях минимум потерь составил: {assignment_total}.")
-        print(f"     При этом истинное расстояние Кемени для порядка задачи назначений равно {d_as},")
-        print(f"     что строго превышает глобальный оптимум Кемени ({bruteforce_total}).")
-        print("   • ВЫВОД: Оптимизация задачи о назначениях с позиционной матрицей потерь")
-        print("     сглаживает парные циклические доминирования и не гарантирует нахождения медианы Кемени.")
+        print(f"   • Порядок, полученный из задачи о назначениях ({' ≻ '.join(first_as)}),")
+        print(f"     не совпадает с истинной глобальной медианой Кемени ({' ≻ '.join(first_km)}).")
+        print(f"   • Минимум потерь по критерию задачи о назначениях составил {assignment_total};")
+        print(f"     расстояние Кемени для полученного порядка равно {d_as},")
+        print(f"     что превышает значение глобального оптимума ({bruteforce_total}).")
+        print("   • Вывод: оптимизация задачи о назначениях с позиционной матрицей потерь")
+        print("     сглаживает парные циклические доминирования и не гарантирует")
+        print("     нахождения медианы Кемени.")
 
     # 3. Множественность оптимумов
-    print("\n3. УСТОЙЧИВОСТЬ ГЛОБАЛЬНОГО ВЫБОРА:")
+    print("\n3. Итоговый выбор экспертов:")
     if len(bruteforce_orders) == 1:
-        print(f"   • Найдено ЕДИНСТВЕННОЕ глобальное медианное ранжирование со значением Кемени {bruteforce_total}:")
-        print(f"     {' ≻ '.join(bruteforce_orders[0])}")
-        print("   • Коллективное предпочтение экспертной комиссии определено однозначно.")
+        print(f"   • Найдено единственное глобальное медианное ранжирование")
+        print(f"     со значением Кемени {bruteforce_total}: {' ≻ '.join(bruteforce_orders[0])}.")
+        print(f"   • Итоговый порядок проектов, согласованный с мнениями всех экспертов, определён однозначно.")
     else:
         print(f"   • Найдено {len(bruteforce_orders)} РАВНОПРАВНЫХ глобальных оптимумов Кемени со значением {bruteforce_total}.")
         print("   • Это свидетельствует о наличии паритета между несколькими перестановками внутри группы.")

@@ -22,7 +22,7 @@ from docx.oxml.ns import nsdecls, qn
 from expert_estimate.transform import transform_data, get_objects
 from expert_estimate.stats import (
     get_ranks_sum, get_ranks_average, get_ranks_median,
-    get_ranking_by_average, get_ranking_by_median
+    get_ranking_by_average, get_ranking_by_median, format_places_order
 )
 from expert_estimate.relations import get_binary_relations, build_distance_matrix
 from expert_estimate.kemeny import (
@@ -565,7 +565,7 @@ def build_report(input_file: Path = BASE_DIR / "input.txt"):
     format_table(t3, [docx.shared.Cm(2.5), docx.shared.Cm(3.5), docx.shared.Cm(3.5), docx.shared.Cm(3.5), docx.shared.Cm(3.5)],
                  [WD_ALIGN_PARAGRAPH.CENTER] * 5)
 
-    avg_order_str = " ≻ ".join(obj for _, obj, _ in avg_ranking)
+    avg_order_str = format_places_order(avg_ranking)
     add_p(f"Результирующий порядок по методу средних арифметических рангов: {avg_order_str}.")
 
     add_h2("3.2. Расчёт медианных рангов")
@@ -592,7 +592,7 @@ def build_report(input_file: Path = BASE_DIR / "input.txt"):
     format_table(t4, [docx.shared.Cm(2.5), docx.shared.Cm(4.5), docx.shared.Cm(3.5), docx.shared.Cm(3.0), docx.shared.Cm(3.0)],
                  [WD_ALIGN_PARAGRAPH.CENTER] * 5)
 
-    med_order_str = " ≻ ".join(obj for _, obj, _ in med_ranking)
+    med_order_str = format_places_order(med_ranking)
     add_p(f"Результирующий порядок по методу медианных рангов: {med_order_str}.")
 
     doc.add_page_break()
