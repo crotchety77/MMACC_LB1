@@ -1,6 +1,7 @@
 from itertools import permutations
 from typing import Dict, List, Optional, Tuple
 
+from .hungarian import hungarian_algorithm
 from .named_matrix import NamedMatrix
 from .relations import kemeny_distance_matrices
 
@@ -53,31 +54,39 @@ def build_loss_matrix(preference_vectors: Dict[int, Dict[str, int]], objects: Li
 
     return loss
 
-def solve_assignment(loss: NamedMatrix, objects: List[str]) -> Tuple[Dict[str, int], int]:
+
+def solve_assignment_hungarian(
+    loss: NamedMatrix,
+    objects: List[str],
+) -> Tuple[Dict[str, int], int, List[str]]:
     """
-    Задача о назначениях перебором.
-    :return: ({объект: место}, минимальные суммарные потери)
+    Основной решатель: Венгерский алгоритм (Куна — Манкреса) со сложностью O(n^3).
+
+    :param loss: матрица позиционных потерь NamedMatrix (строки — объекты, столбцы — '1'..'n')
+    :param objects: упорядоченный список объектов
+    :return: ({объект: место}, минимальные суммарные потери, список объектов в порядке убывания приоритета)
     """
     n = len(objects)
-    best_order: Optional[List[str]] = None
-    best_total = float("inf")
+    cost_matrix = [[loss[obj, str(j)] for j in range(1, n + 1)] for obj in objects]
+    assign, total = hungarian_algorithm(cost_matrix)
 
-    for perm in permutations(objects):
-        total = sum(loss[perm[j], str(j + 1)] for j in range(n))
-        if total < best_total:
-            best_total = total
-            best_order = list(perm)
+    places = {obj: assign[i] + 1 for i, obj in enumerate(objects)}
+    order = [None] * n
+    for obj, place in places.items():
+        order[place - 1] = obj
 
-    return {obj: pos + 1 for pos, obj in enumerate(best_order)}, int(best_total)
+    return places, int(total), order
 
-def get_all_assignment_optima(
+
+def solve_assignment_bruteforce(
     loss: NamedMatrix,
     objects: List[str],
 ) -> Tuple[List[List[str]], int]:
     """
-    Все оптимальные решения задачи о назначениях перебором.
+    Независимый механизм проверки: полный перебор всех n! перестановок.
+    Гарантирует нахождение ВСЕХ альтернативных оптимальных назначений при наличии ничьих.
 
-    :return: (все оптимальные ранжирования, минимальные суммарные потери)
+    :return: (список всех оптимальных ранжирований, минимальные суммарные потери)
     """
     n = len(objects)
     best_total = float("inf")
@@ -94,6 +103,52 @@ def get_all_assignment_optima(
     return best_orders, int(best_total)
 
 
+def solve_assignment(loss: NamedMatrix, objects: List[str]) -> Tuple[Dict[str, int], int]:
+    """
+    Решает задачу о назначениях.
+    - Основной решатель: венгерский метод O(n^3).
+    - Независимая проверка: полный перебор перестановок (при n <= 9).
+
+    :return: ({объект: место}, минимальные суммарные потери)
+    """
+    places, total, _ = solve_assignment_hungarian(loss, objects)
+
+    # Верификация перебором при доступном n
+    if len(objects) <= 9:
+        _, bf_total = solve_assignment_bruteforce(loss, objects)
+        if total != bf_total:
+            raise ValueError(
+                f"Несоответствие алгоритмов: венгерский метод дал потери {total}, "
+                f"а полный перебор дал {bf_total}"
+            )
+
+    return places, total
+
+
+def get_all_assignment_optima(
+    loss: NamedMatrix,
+    objects: List[str],
+) -> Tuple[List[List[str]], int]:
+    """
+    Все оптимальные решения задачи о назначениях:
+    - Основной решатель: венгерский алгоритм O(n^3).
+    - Полный перебор всех n! вариантов для независимой верификации минимума и выявления всех ничьих.
+
+    :return: (все оптимальные ранжирования [с решением венгерского метода первым], минимальные суммарные потери)
+    """
+    _, h_total, h_order = solve_assignment_hungarian(loss, objects)
+    bf_orders, bf_total = solve_assignment_bruteforce(loss, objects)
+
+    if h_total != bf_total:
+        raise ValueError(
+            f"Несоответствие алгоритмов: венгерский метод дал {h_total}, а перебор дал {bf_total}"
+        )
+
+    # Венгерское решение гарантированно ставится во главу списка оптимумов
+    orders = [h_order] + [o for o in bf_orders if o != h_order]
+    return orders, h_total
+
+
 def get_all_assignment_medians(table: Dict[int, Dict[str, int]], objects: List[str]) -> Tuple[List[List[str]], int, NamedMatrix]:
     """
     Все оптимальные ранжирования по методу задачи о назначениях.
@@ -108,13 +163,18 @@ def get_all_assignment_medians(table: Dict[int, Dict[str, int]], objects: List[s
 
 def get_kemeny_median_assignment(table: Dict[int, Dict[str, int]], objects: List[str]) -> Tuple[List[str], int, NamedMatrix, NamedMatrix]:
     """
-    Полный цикл метода через задачу о назначениях.
+    Полный цикл метода через задачу о назначениях на основе венгерского алгоритма.
     :return: (ранжирование, сумма потерь, матрица потерь r_ij, матрица назначений X)
     """
     pv = get_preference_vectors(table, objects)
     loss = build_loss_matrix(pv, objects)
-    places, total = solve_assignment(loss, objects)
-    order = [obj for obj, _ in sorted(places.items(), key=lambda x: x[1])]
+    places, total, order = solve_assignment_hungarian(loss, objects)
+
+    # Верификация минимума
+    if len(objects) <= 9:
+        _, bf_total = solve_assignment_bruteforce(loss, objects)
+        if total != bf_total:
+            raise ValueError(f"Расхождение венгерского алгоритма ({total}) и перебора ({bf_total})")
 
     n = len(objects)
     X = NamedMatrix(rows=objects, cols=[str(j) for j in range(1, n + 1)], default=0)
@@ -123,7 +183,7 @@ def get_kemeny_median_assignment(table: Dict[int, Dict[str, int]], objects: List
 
     return order, total, loss, X
 
-# ---------- полный перебор (для проверки) ----------
+# ---------- полный перебор (для истинной медианы Кемени) ----------
 
 def ranking_to_matrix(order: List[str], objects: List[str]) -> NamedMatrix:
     """Строит матрицу бинарных отношений по ранжированию.
